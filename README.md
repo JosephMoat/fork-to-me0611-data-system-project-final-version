@@ -1,58 +1,55 @@
-# Graduation Credit Verification System (畢業學分檢核系統)
+# 國立政治大學 資訊科學系 畢業學分驗證系統
+(NCCU CS Graduation Credit Verification System)
 
-本專案是一個整合「學分分析、通識必修比對、排課模擬、走動預警」之新世代學位檢核系統。
+本系統專為國立政治大學資訊科學系學生設計，旨在自動化解析與驗證學生的修課成績，並視覺化呈現畢業學分門檻達成進度。
 
-本專案使用以下技術棧：
-- **前端**：React + Vite + TypeScript (埠口: 3000)
-- **後端**：Python FastAPI (埠口: 8000)
-- **資料庫**：MySQL (埠口: 3306)
-- **容器化技術**：Docker & Docker Compose 一鍵啟動
+## 🌟 系統特色 (Features)
 
----
+- **🎓 畢業門檻自動驗證**：
+  - 精準計算「專業必修 (51學分)」、「專業選修 (49學分)」、「通識大水庫 (28學分)」。
+  - 動態對齊政大資科系最新規範（含資訊專題、群修 B~E 歸類為系選修）。
+- **📊 視覺化儀表板 (Dashboard)**：
+  - 以圓形進度條與直觀的卡片呈現各類別學分達成率。
+  - 核心通識跨領域規定（自然、社會、人文）合併檢核與防呆預警。
+- **📝 詳細規則清單 (Graduation Rules)**：
+  - 一目了然的條列式清單，指出具體缺少哪些必修課與學分。
+- **🤖 選課推薦 (Course Recommendation)**：
+  - 根據學生尚未滿足的畢業門檻與選課歷史，推薦合適的課程。
 
-## 快速啟動 (Docker 一鍵部署)
+## 🚀 技術堆疊 (Tech Stack)
 
-本專案已完全容器化。只需在一台安裝了 [Docker Desktop](https://www.docker.com/products/docker-desktop/) 的電腦上執行以下步驟即可一鍵啟動整個系統。
+### Frontend (前端)
+- React 18
+- Vite
+- TypeScript
+- Tailwind CSS
+- Lucide React (Icons)
+- React Router DOM
 
-### 1. 啟動所有容器
-請在專案根目錄（包含 `docker-compose.yml` 的目錄）開啟終端機，執行：
-```bash
-docker compose up --build
-```
-此指令會自動：
-- 啟動 MySQL 資料庫，並在背景運行。
-- 編譯並啟動 Python FastAPI 後端伺服器 (映射至主機 `8000` 埠口)。
-- 編譯並啟動 React 前端 Web 伺服器 (映射至主機 `3000` 埠口)。
+### Backend (後端)
+- FastAPI (Python)
+- SQLite (資料庫)
+- SQLAlchemy (ORM)
+- Uvicorn (Server)
 
-### 2. 初始化資料庫與匯入種子資料 (Seeding)
-在容器成功啟動後，請另外開啟一個終端機視窗，進入後端目錄 `dbms_final_backend` 並執行種子腳本：
+## 🛠️ 本地執行指南 (Local Setup)
+
+### 1. 啟動後端 (Backend)
 ```bash
 cd dbms_final_backend
-python seed.py
+pip install -r requirements.txt
+python seed.py # 初始化資料庫與規則
+python -m uvicorn app.main:app --reload --port 8000
 ```
-*這會自動初始化所有資料表，並為測試帳號寫入政大資科系必修、一般通識規則，以及學生「聖結石」的歷年修課數據。*
+*(註：若 Windows 系統 Port 8000 被 PID 4 (System) 佔用，可改為 `--port 8001` 並同步修改前端 `api.ts` 的 baseURL)*
 
-### 3. 開始使用
-打開瀏覽器，訪問：
-👉 **http://localhost:3000**
+### 2. 啟動前端 (Frontend)
+```bash
+cd graduation-credit-verification-system
+npm install
+npm run dev
+```
+瀏覽器開啟 `http://localhost:3000` 即可使用系統。
 
-- **測試學號**：`110306078`
-- **預設密碼**：`password123`
-
----
-
-## 本地開發手動啟動模式 (不使用 Docker)
-
-如果您想在本地進行開發除錯，也可以分別啟動前後端：
-
-### 後端啟動
-1. 進入 `dbms_final_backend` 目錄。
-2. 安裝套件：`pip3 install -r requirements.txt` (注意：為解決 passlib 相容問題，建議使用 `pip3 install bcrypt==4.3.0`)。
-3. 初始化資料庫：`python3 seed.py` (預設為 MySQL，若要改用 SQLite，請修改 `.env` 中的 `DATABASE_URL=sqlite:///./sql_app.db`)。
-4. 啟動伺服器：`python3 -m uvicorn app.main:app --reload --port 8000`。
-
-### 前端啟動
-1. 進入 `graduation-credit-verification-system` 目錄。
-2. 安裝依賴：`npm install`。
-3. 啟動網頁：`npm run dev`。
-4. 訪問 `http://localhost:3000`。
+## 👥 開發團隊
+本專案為政大資料庫系統課程 (DBMS) 期末專案。

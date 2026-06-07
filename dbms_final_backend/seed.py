@@ -15,14 +15,32 @@ from app.models.student_course_record import StudentCourseRecord
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+# ── Category ID 常數（依插入順序對應）────────────────────────
+CAT_REQUIRED_GENERAL = 1   # 必修 / 一般必修
+CAT_REQUIRED_A       = 2   # 必修 / 群A
+CAT_REQUIRED_B       = 3   # 必修 / 群B
+CAT_REQUIRED_C       = 4   # 必修 / 群C
+CAT_ELECTIVE         = 5   # 選修
+CAT_GE_CHINESE       = 6   # 通識 / 中文通識
+CAT_GE_NATURE        = 7   # 通識 / 自然通識
+CAT_GE_SOCIAL        = 8   # 通識 / 社會通識
+CAT_GE_HUMANITY      = 9   # 通識 / 人文通識
+CAT_GE_INFO          = 10  # 通識 / 資訊通識
+CAT_GE_COLLEGE       = 11  # 通識 / 書院通識
+CAT_CORE_NATURE      = 12  # 核心通識 / 自然
+CAT_CORE_SOCIAL      = 13  # 核心通識 / 社會
+CAT_CORE_HUMANITY    = 14  # 核心通識 / 人文
+CAT_ENGLISH          = 15  # 英文
+CAT_PE               = 16  # 體育
+
+
 def seed():
-    # Make sure tables exist
     Base.metadata.create_all(bind=engine)
     print("Database tables created successfully.")
 
     db: Session = SessionLocal()
     try:
-        # Clear existing data to allow full reset and clean state
+        # ── 清空舊資料 ──────────────────────────────────────
         print("Clearing existing data from tables...")
         db.query(StudentCourseRecord).delete()
         db.query(CourseCategoryMapping).delete()
@@ -35,232 +53,800 @@ def seed():
         db.commit()
         print("Data cleared successfully.")
 
-        # 1. Seed Student Profile
-        student_id = "110306078"
-        student = db.query(Student).filter(Student.student_id == student_id).first()
-        if not student:
-            student = Student(
-                student_id=student_id,
-                name="聖結石",
-                admission_year=110,
-                department="資訊科學系 (Computer Science)"
-            )
-            db.add(student)
-            db.flush()
-            print(f"Student {student.name} created.")
-        else:
-            print("Student already exists.")
-
-        # 2. Seed User Login
-        user = db.query(User).filter(User.username == student_id).first()
-        if not user:
-            user = User(
-                student_id=student_id,
-                username=student_id,
-                password_hash=pwd_context.hash("password123")
-            )
-            db.add(user)
-            db.flush()
-            print(f"User for {student_id} created (password: password123).")
-        else:
-            print("User already exists.")
-
-        # 3. Seed Course Categories
-        # IDs: 1: 必修, 2: 選修, 3: 通識, 4: 體育, 5: 英文
+        # ════════════════════════════════════════════════════
+        # 1. COURSE CATEGORIES
+        # ════════════════════════════════════════════════════
         categories_data = [
-            (1, "必修", None),
-            (2, "選修", None),
-            (3, "通識", None),
-            (4, "體育", None),
-            (5, "英文", None)
+            (CAT_REQUIRED_GENERAL, "必修",    "一般必修"),
+            (CAT_REQUIRED_A,       "必修",    "群A"),
+            (CAT_REQUIRED_B,       "必修",    "群B"),
+            (CAT_REQUIRED_C,       "必修",    "群C"),
+            (CAT_ELECTIVE,         "選修",    None),
+            (CAT_GE_CHINESE,       "通識",    "中文通識"),
+            (CAT_GE_NATURE,        "通識",    "自然通識"),
+            (CAT_GE_SOCIAL,        "通識",    "社會通識"),
+            (CAT_GE_HUMANITY,      "通識",    "人文通識"),
+            (CAT_GE_INFO,          "通識",    "資訊通識"),
+            (CAT_GE_COLLEGE,       "通識",    "書院通識"),
+            (CAT_CORE_NATURE,      "核心通識", "自然"),
+            (CAT_CORE_SOCIAL,      "核心通識", "社會"),
+            (CAT_CORE_HUMANITY,    "核心通識", "人文"),
+            (CAT_ENGLISH,          "英文",    None),
+            (CAT_PE,               "體育",    None),
         ]
-        
         for cat_id, main, sub in categories_data:
-            cat = db.query(CourseCategory).filter(CourseCategory.category_id == cat_id).first()
+            cat = db.query(CourseCategory).filter(
+                CourseCategory.category_id == cat_id
+            ).first()
             if not cat:
-                cat = CourseCategory(category_id=cat_id, main_type=main, sub_type=sub)
+                cat = CourseCategory(
+                    category_id=cat_id, main_type=main, sub_type=sub
+                )
                 db.add(cat)
-                print(f"Category {main} added.")
+                print(f"  Category [{cat_id}] {main}/{sub} added.")
         db.flush()
 
-        # 4. Seed Graduation Rules for Year 110
-        # Category rules:
-        # Rule 1: Category 2 (選修) min_credits=18
-        # Rule 2: Category 3 (通識) min_credits=28
-        # Rule 3: Category 4 (體育) min_courses=4
-        # Rule 4: Category 5 (英文) min_credits=3
-        rules_data = [
-            (2, None, 18), # 選修
-            (3, None, 28), # 通識
-            (4, 4, None),  # 體育 (4 courses)
-            (5, None, 3)   # 英文
+        # ════════════════════════════════════════════════════
+        # 2. GRADUATION RULES（入學年 111）
+        # ════════════════════════════════════════════════════
+        graduation_rules_data = [
+            # (category_id, min_courses, min_credits)
+            (CAT_REQUIRED_GENERAL, 15, 45),   # 一般必修全部修
+            (CAT_REQUIRED_A,        2,  6),   # 群A 至少 2 門
+            (CAT_REQUIRED_B,        1,  3),   # 群B 至少 1 門
+            (CAT_REQUIRED_C,        1,  3),   # 群C 至少 1 門
+            (CAT_GE_CHINESE,        1,  3),   # 中文通識 1 門 3 學分
+            (CAT_GE_INFO,        None,  0),   # 資訊通識 最高 3 學分 (資科系為0-3)
+            (CAT_GE_NATURE,      None,  3),   # 自然通識 最少 3 學分
+            (CAT_GE_SOCIAL,      None,  3),   # 社會通識 最少 3 學分
+            (CAT_GE_HUMANITY,    None,  3),   # 人文通識 最少 3 學分
+            (CAT_CORE_NATURE,       1,  3),   # 核心通識自然 至少 1 門
+            (CAT_CORE_SOCIAL,       1,  3),   # 核心通識社會 至少 1 門（與自然/人文共同達成「兩種不同類別」條件）
+            (CAT_CORE_HUMANITY,     1,  3),   # 核心通識人文 至少 1 門
+            (CAT_GE_COLLEGE,     None,  0),   # 書院通識 可不修
+            (CAT_ENGLISH,           2,  6),   # 英文 2 門 6 學分
+            (CAT_PE,                4,  None),# 體育 至少 4 門
         ]
-        
-        for cat_id, min_c, min_cr in rules_data:
+        for cat_id, min_c, min_cr in graduation_rules_data:
             rule = db.query(GraduationRule).filter(
-                GraduationRule.admission_year == 110,
+                GraduationRule.admission_year == 111,
                 GraduationRule.category_id == cat_id
             ).first()
             if not rule:
                 rule = GraduationRule(
-                    admission_year=110,
+                    admission_year=111,
                     category_id=cat_id,
                     min_courses=min_c,
                     min_credits=min_cr
                 )
                 db.add(rule)
-                print(f"Graduation rule for Category ID {cat_id} added.")
+                print(f"  GraduationRule category_id={cat_id} added.")
         db.flush()
 
-        # 5. Seed Course listings and Category Mappings
-        # We need to populate courses and link them to categories
+        # ════════════════════════════════════════════════════
+        # 3. COURSES + CATEGORY MAPPINGS
+        # 格式：(course_id, course_name, credits, [cat_id, ...])
+        # 核心通識課程會有兩個 category_id
+        # ════════════════════════════════════════════════════
         courses_to_seed = [
-            # Core required courses
-            ("703001001", "計算機概論 (Introduction to CS)", 3, 1),
-            ("703002001", "微積分甲 (Calculus I)", 4, 1),
-            ("000101001", "大學英文 (Freshman English)", 3, 5),
-            ("000311020", "通識：自然科學與生命體驗", 2, 3),
-            ("000201001", "體育 (健康體能)", 0, 4),
-            ("703003001", "程式設計 (Programming Guilds)", 3, 1),
-            ("703004001", "線性代數 (Linear Algebra)", 3, 1),
-            ("000315011", "通識：歷史與多元社會", 2, 3),
-            ("000102001", "大學中文 (Freshman Chinese)", 3, 1),
-            ("000202001", "體育 (桌球)", 0, 4),
-            ("703005001", "資料結構 (Data Structures)", 3, 1),
-            ("703006001", "離散數學 (Discrete Mathematics)", 3, 1),
-            ("703007001", "數位系統設計 (Digital Systems)", 3, 1),
-            ("703021001", "專業選修：虛擬實境導論", 3, 2),
-            ("000318041", "通識：藝術與媒體美學", 3, 3),
-            ("703008001", "演算法 (Algorithms)", 3, 1),
-            ("703009001", "作業系統 (Operating Systems)", 3, 1),
-            ("703022001", "專業選修：資料庫系統原理", 3, 2),
-            ("000312015", "通識：憲政法治與人權", 3, 3),
-            ("000203001", "體育 (太極拳)", 0, 4),
-            ("703010001", "計算機組織 (Computer Architecture)", 3, 1),
-            ("703023001", "專業選修：人工智慧導論", 3, 2),
-            ("703024001", "專業選修：網頁前端開發技術", 3, 2),
-            ("000314052", "通識：哲學思辨與永續生活", 3, 3),
-            ("000204001", "體育 (網球)", 0, 4),
-            ("703011001", "軟體工程 (Software Engineering)", 3, 1),
-            ("703025001", "專業選修：熱門機器學習實務", 3, 2),
-            ("703026001", "專業選修：雲端運算與系統架構", 3, 2),
-            ("000320011", "通識：跨文化溝通專題", 2, 3),
-            ("703027001", "專業選修：物聯網感知技術", 3, 2),
-            ("703028001", "專業選修：巨量資料分析", 3, 2),
-            ("703012002", "微積分甲 (Calculus II)", 4, 1),
-            ("703013002", "物件導向程式設計 (Object-Oriented Programming)", 3, 1),
-            ("000325001", "通識：現代生物學與生物技術", 3, 3),
-            ("703014002", "機率與統計 (Probability & Statistics)", 3, 1),
-            ("703015002", "數位系統設計實驗 (Digital Systems Lab)", 1, 1),
-            ("000326001", "通識：民主路上的法律思辨", 3, 3),
-            ("703016002", "系統程式 (System Programming)", 3, 1),
-            ("000327001", "通識：臺灣歷史與文化", 3, 3),
-            ("703017002", "資訊科學專題(一) (CS Project I)", 1, 1),
-            ("703030002", "資訊科學專題(二) (CS Project II)", 1, 2),
-            ("000328001", "通識：基礎日語一", 2, 3),
-            # Missing core required courses (recommendation candidates)
-            ("703013001", "計算機網路 (Computer Networks)", 3, 1),
-            ("703014001", "編譯器設計 (Compiler Design)", 3, 1),
-            # Recommendation candidates
-            ("703056002", "巨量資料分析與應用 (Big Data Analytics)", 3, 2),
-            ("000317024", "通識：全球科技革命與人類文明", 2, 3),
-            ("703058001", "區塊鏈與去中心化應用 (Blockchain & dApps)", 3, 2),
+            # ── 一般必修 ──────────────────────────────────
+            ("703001001", "計算機概論 (Introduction to CS)", 3, [CAT_REQUIRED_GENERAL]),
+            ("000713021", "微積分甲 (Calculus I)", 3, [CAT_REQUIRED_GENERAL]),
+            ("000713022", "微積分甲 (Calculus II)", 3, [CAT_REQUIRED_GENERAL]),
+            ("703049001", "計算機程式設計（一） (Programming Guilds)", 3, [CAT_REQUIRED_GENERAL]),
+            ("703050001", "計算機程式設計（二） (Programming Guilds)", 3, [CAT_REQUIRED_GENERAL]),
+            ("703002001", "線性代數 (Linear Algebra)", 3, [CAT_REQUIRED_GENERAL]),
+            ("703009001", "物件導向程式設計 (Object-Oriented Programming)", 3, [CAT_REQUIRED_GENERAL]),
+            ("703008001", "資料結構 (Data Structures)", 3, [CAT_REQUIRED_GENERAL]),
+            ("703017001", "機率論 (Probability & Statistics)", 3, [CAT_REQUIRED_GENERAL]),
+            ("703007001", "離散數學 (Discrete Mathematics)", 3, [CAT_REQUIRED_GENERAL]),
+            ("703022001", "演算法 (Algorithms)", 3, [CAT_REQUIRED_GENERAL]),
+            ("703014001", "數位系統設計 (Digital Systems Design)", 3, [CAT_REQUIRED_GENERAL]),
+            ("703015001", "數位系統實驗 (Digital Systems Experiment)", 3, [CAT_REQUIRED_GENERAL]),
+            ("703019001", "計算機組織 (Computer Architecture)", 3, [CAT_REQUIRED_GENERAL]),
+            ("703016001", "作業系統 (Operating Systems)", 3, [CAT_REQUIRED_GENERAL]),
+            # ── 群A ───────────────────────────────────────
+            ("703044001", "資訊專題(A) (CS Project A)", 3, [CAT_REQUIRED_A]),
+            ("703046001", "資訊專題(C) (CS Project C)", 3, [CAT_REQUIRED_A]),
+            ("703047001", "資訊專題(D) (CS Project D)", 3, [CAT_REQUIRED_A]),
+            # ── 群B ───────────────────────────────────────
+            ("703038001", "人工智慧概論 (Artificial Intelligence Concept)", 3, [CAT_REQUIRED_B]),
+            ("703027001", "計算機網路 (Computer Networks)", 3, [CAT_REQUIRED_B]),
+            ("703039001", "軟體工程概論 (Software Engineering)", 3, [CAT_REQUIRED_B]),
+            ("703055001", "人機互動 (Machine Interaction)", 3, [CAT_REQUIRED_B]),
+            ("703025001", "資料庫系統 (Database System)", 3, [CAT_REQUIRED_B]),
+            ("703060001", "資訊安全 (Information Safety)", 3, [CAT_REQUIRED_B]),
+            # ── 群C ───────────────────────────────────────
+            ("703059001", "分散式系統", 3, [CAT_REQUIRED_C]),
+            ("703053001", "電腦圖學", 3, [CAT_REQUIRED_C]),
+            ("703010001", "編譯器設計 (Compiler Design)", 3, [CAT_REQUIRED_C]),
+            ("703042001", "等候理論", 3, [CAT_REQUIRED_C]),
+            # ── 選修 ──────────────────────────────────────
+            ("002888001", "體育[男女合班]—羽球實務（選修）", 2, [CAT_ELECTIVE]),
+            # ── 英文 ──────────────────────────────────────
+            ("032001011", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001021", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001031", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001041", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001051", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001061", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001071", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001081", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001091", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001201", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001211", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001221", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001231", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001241", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001251", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001261", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001271", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001281", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001291", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001301", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001311", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001401", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001411", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001421", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001431", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001441", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001451", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001461", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001471", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001481", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001491", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001501", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001511", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001601", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001611", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001621", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001631", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001641", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001651", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001661", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001671", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001681", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001691", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001701", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001711", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001801", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001811", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001821", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001831", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001841", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001881", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001901", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001911", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001921", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001931", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001941", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032001951", "大學英文（一）", 3, [CAT_ENGLISH]),
+            ("032002011", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002021", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002031", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002041", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002051", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002061", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002071", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002081", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002091", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002201", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002211", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002221", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002231", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002241", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002251", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002261", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002271", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002281", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002291", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002301", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002401", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002411", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002421", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002431", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002441", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002451", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002461", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002471", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002481", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002491", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002501", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002511", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002601", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002611", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002621", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002631", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002641", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002651", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002661", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002671", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002681", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002691", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002701", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002711", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002801", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002811", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002821", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002831", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002841", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002881", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002901", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002911", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002921", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002931", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002941", "大學英文（二）", 3, [CAT_ENGLISH]),
+            ("032002951", "大學英文（二）", 3, [CAT_ENGLISH]),
+            # ── 中文通識 ──────────────────────────────────
+            ("031004011", "國文－古典詩選讀", 3, [CAT_GE_CHINESE]),
+            ("031004051", "國文－古典詩選讀", 3, [CAT_GE_CHINESE]),
+            ("031004061", "國文－古典詩選讀", 3, [CAT_GE_CHINESE]),
+            ("031004081", "國文－古典詩選讀", 3, [CAT_GE_CHINESE]),
+            ("031004091", "國文－古典詩選讀", 3, [CAT_GE_CHINESE]),
+            ("031004101", "國文－古典詩選讀", 3, [CAT_GE_CHINESE]),
+            ("031004111", "國文－古典詩選讀", 3, [CAT_GE_CHINESE]),
+            ("031007011", "國文－古典散文選讀", 3, [CAT_GE_CHINESE]),
+            ("031008011", "國文－古典小說選讀", 3, [CAT_GE_CHINESE]),
+            ("031008021", "國文－古典小說選讀", 3, [CAT_GE_CHINESE]),
+            ("031008031", "國文－古典小說選讀", 3, [CAT_GE_CHINESE]),
+            ("031008041", "國文－古典小說選讀", 3, [CAT_GE_CHINESE]),
+            ("031008051", "國文－古典小說選讀", 3, [CAT_GE_CHINESE]),
+            ("031013011", "國文－臺灣文學選讀", 3, [CAT_GE_CHINESE]),
+            ("031013041", "國文－臺灣文學選讀", 3, [CAT_GE_CHINESE]),
+            ("031014161", "國文－中國思想名作選讀", 3, [CAT_GE_CHINESE]),
+            ("031014171", "國文－中國思想名作選讀", 3, [CAT_GE_CHINESE]),
+            ("031015011", "國文─中國神話選讀", 3, [CAT_GE_CHINESE]),
+            ("031017101", "國文－中國語言文字名作選讀", 3, [CAT_GE_CHINESE]),
+            ("031017111", "國文－中國語言文字名作選讀", 3, [CAT_GE_CHINESE]),
+            ("031017121", "國文－中國語言文字名作選讀", 3, [CAT_GE_CHINESE]),
+            ("031017131", "國文－中國語言文字名作選讀", 3, [CAT_GE_CHINESE]),
+            ("031017141", "國文－中國語言文字名作選讀", 3, [CAT_GE_CHINESE]),
+            ("031017151", "國文－中國語言文字名作選讀", 3, [CAT_GE_CHINESE]),
+            ("031023001", "國文－臺灣語言與文化選讀", 3, [CAT_GE_CHINESE]),
+            ("031023011", "國文－臺灣語言與文化選讀", 3, [CAT_GE_CHINESE]),
+            ("031023021", "國文－臺灣語言與文化選讀", 3, [CAT_GE_CHINESE]),
+            ("031024001", "進階國文－近代小說選讀", 3, [CAT_GE_CHINESE]),
+            ("031025001", "國文－入門班", 3, [CAT_GE_CHINESE]),
+            ("031026001", "國文－基礎班", 3, [CAT_GE_CHINESE]),
+            ("031027001", "國文－進階班", 3, [CAT_GE_CHINESE]),
+            # ── 人文通識（一般）──────────────────────────
+            ("041026011", "台灣歷史與文化", 2, [CAT_GE_HUMANITY]),
+            ("041038001", "當代台灣旅行文學欣賞", 3, [CAT_GE_HUMANITY]),
+            ("041095001", "客家語言與文化", 3, [CAT_GE_HUMANITY]),
+            ("041097001", "轉型期與近代東亞: 從1930年代到1940年代", 2, [CAT_GE_HUMANITY]),
+            ("041116001", "語言與文化：以美式英文為例", 3, [CAT_GE_HUMANITY]),
+            ("041125001", "台灣現代文學選讀", 3, [CAT_GE_HUMANITY]),
+            ("041172001", "英美大眾小說：偵探和浪漫文類", 3, [CAT_GE_HUMANITY]),
+            ("041179001", "古代希臘的歷史與文化", 2, [CAT_GE_HUMANITY]),
+            ("041187001", "認識故宮名畫", 3, [CAT_GE_HUMANITY]),
+            ("041191001", "實用台灣閩南語", 3, [CAT_GE_HUMANITY]),
+            ("041207001", "解密生命樹：基督宗教傳統的跨時空之旅", 3, [CAT_GE_HUMANITY]),
+            ("041211001", "當代台灣電影、文化與社會", 3, [CAT_GE_HUMANITY]),
+            ("041214001", "俄羅斯文學、電影與藝術", 3, [CAT_GE_HUMANITY]),
+            ("041215001", "戲曲賞鑑與習藝實踐", 3, [CAT_GE_HUMANITY]),
+            ("041216001", "宗教朝聖與靈性旅遊", 3, [CAT_GE_HUMANITY]),
+            ("041217001", "語用學：跨文化與數位溝通", 3, [CAT_GE_HUMANITY]),
+            ("090066001", "看的方法（紀錄片）", 2, [CAT_GE_HUMANITY]),
+            ("090101001", "西歐歷史建築", 2, [CAT_GE_HUMANITY]),
+            ("090112001", "自我探索與心理健康", 2, [CAT_GE_HUMANITY]),
+            ("090123001", "舞蹈鑑賞", 3, [CAT_GE_HUMANITY]),
+            ("993031001", "戲劇音樂：人性", 2, [CAT_GE_HUMANITY]),
+            # ── 核心人文通識（人文通識 + 核心通識人文）────
+            ("041099041", "文明發展與歷史思惟", 3, [CAT_GE_HUMANITY, CAT_CORE_HUMANITY]),
+            ("041099061", "文明發展與歷史思惟", 3, [CAT_GE_HUMANITY, CAT_CORE_HUMANITY]),
+            ("041100001", "生命價值與哲學思惟", 3, [CAT_GE_HUMANITY, CAT_CORE_HUMANITY]),
+            ("041123001", "生命探索與宗教文化", 3, [CAT_GE_HUMANITY, CAT_CORE_HUMANITY]),
+            ("041133011", "近代臺灣歷史與人物", 3, [CAT_GE_HUMANITY, CAT_CORE_HUMANITY]),
+            ("041135001", "西方文學經典與人文思維", 3, [CAT_GE_HUMANITY, CAT_CORE_HUMANITY]),
+            ("041135011", "西方文學經典與人文思維", 3, [CAT_GE_HUMANITY, CAT_CORE_HUMANITY]),
+            ("041177001", "語言的人文與科學", 3, [CAT_GE_HUMANITY, CAT_CORE_HUMANITY]),
+            ("041177011", "語言的人文與科學", 3, [CAT_GE_HUMANITY, CAT_CORE_HUMANITY]),
+            ("041177021", "語言的人文與科學", 3, [CAT_GE_HUMANITY, CAT_CORE_HUMANITY]),
+            ("041195001", "藝術與當代社會", 3, [CAT_GE_HUMANITY, CAT_CORE_HUMANITY]),
+            ("041195011", "藝術與當代社會", 3, [CAT_GE_HUMANITY, CAT_CORE_HUMANITY]),
+            # ── 社會通識（一般）──────────────────────────
+            ("042051001", "經濟全球化與台商大陸投資", 2, [CAT_GE_SOCIAL]),
+            ("042053001", "歐洲政府與外交政策", 2, [CAT_GE_SOCIAL]),
+            ("042089001", "從漫畫看日本", 2, [CAT_GE_SOCIAL]),
+            ("042096001", "歐盟的兩岸政策", 2, [CAT_GE_SOCIAL]),
+            ("042103001", "由歷史事件看國際關係", 2, [CAT_GE_SOCIAL]),
+            ("042131001", "全球經濟與勞工問題", 2, [CAT_GE_SOCIAL]),
+            ("042166001", "國際法導論", 2, [CAT_GE_SOCIAL]),
+            ("042183001", "歐亞樞紐下的土耳其", 3, [CAT_GE_SOCIAL]),
+            ("042194001", "戰後日本外交史與經濟外交", 2, [CAT_GE_SOCIAL]),
+            ("042195001", "組織中的關係管理", 3, [CAT_GE_SOCIAL]),
+            ("042198001", "社會創新與未來創造", 3, [CAT_GE_SOCIAL]),
+            ("042200001", "認識勞資關係與勞動權益", 2, [CAT_GE_SOCIAL]),
+            ("042201001", "誰來審判？國民法官就是你", 3, [CAT_GE_SOCIAL]),
+            ("042207001", "地方創生入門", 2, [CAT_GE_SOCIAL]),
+            ("042215001", "人工智慧與社會", 3, [CAT_GE_SOCIAL]),
+            ("042217001", "AI、性別與勞動", 3, [CAT_GE_SOCIAL]),
+            ("042219001", "商標權管理與品牌競爭", 2, [CAT_GE_SOCIAL]),
+            ("042220001", "永續發展與地方創生", 3, [CAT_GE_SOCIAL]),
+            ("042221001", "人工智慧與法律", 3, [CAT_GE_SOCIAL]),
+            ("042222001", "人本交通與永續校園規劃", 2, [CAT_GE_SOCIAL]),
+            ("090126001", "聲音自媒體應用與創作", 3, [CAT_GE_SOCIAL]),
+            # ── 核心社會通識（社會通識 + 核心通識社會）────
+            ("042112091", "臺灣政治", 3, [CAT_GE_SOCIAL, CAT_CORE_SOCIAL]),
+            ("042116011", "生活中的經濟學", 3, [CAT_GE_SOCIAL, CAT_CORE_SOCIAL]),
+            ("042116041", "生活中的經濟學", 3, [CAT_GE_SOCIAL, CAT_CORE_SOCIAL]),
+            ("042133001", "社會學動動腦", 3, [CAT_GE_SOCIAL, CAT_CORE_SOCIAL]),
+            ("042133011", "社會學動動腦", 3, [CAT_GE_SOCIAL, CAT_CORE_SOCIAL]),
+            ("042137001", "法學素養", 3, [CAT_GE_SOCIAL, CAT_CORE_SOCIAL]),
+            ("042137011", "法學素養", 3, [CAT_GE_SOCIAL, CAT_CORE_SOCIAL]),
+            ("042139021", "認識智慧財產權", 3, [CAT_GE_SOCIAL, CAT_CORE_SOCIAL]),
+            ("042142001", "環視全球－挑戰國際視野", 3, [CAT_GE_SOCIAL, CAT_CORE_SOCIAL]),
+            ("042142011", "環視全球－挑戰國際視野", 3, [CAT_GE_SOCIAL, CAT_CORE_SOCIAL]),
+            ("042156001", "中國大陸概論", 3, [CAT_GE_SOCIAL, CAT_CORE_SOCIAL]),
+            ("042156021", "中國大陸概論", 3, [CAT_GE_SOCIAL, CAT_CORE_SOCIAL]),
+            ("042156031", "中國大陸概論", 3, [CAT_GE_SOCIAL, CAT_CORE_SOCIAL]),
+            ("042156051", "中國大陸概論", 3, [CAT_GE_SOCIAL, CAT_CORE_SOCIAL]),
+            ("042181001", "教育探索與自我學習", 3, [CAT_GE_SOCIAL, CAT_CORE_SOCIAL]),
+            ("042181011", "教育探索與自我學習", 3, [CAT_GE_SOCIAL, CAT_CORE_SOCIAL]),
+            # ── 自然通識（一般）──────────────────────────
+            ("043021001", "探索遺傳特性", 2, [CAT_GE_NATURE]),
+            ("043033001", "藥你康健、遠離毒惑（禍）", 3, [CAT_GE_NATURE]),
+            ("043042001", "醫病風險數據與醫療（照護）管理", 2, [CAT_GE_NATURE]),
+            ("043045001", "睡眠與健康", 3, [CAT_GE_NATURE]),
+            ("043048001", "星空捎來的信", 3, [CAT_GE_NATURE]),
+            ("090014011", "生物技術導論", 2, [CAT_GE_NATURE]),
+            ("090020001", "認識中醫藥", 2, [CAT_GE_NATURE]),
+            ("090033001", "野生動物保育行銷", 2, [CAT_GE_NATURE]),
+            ("090044001", "藥物使用與生活的關係", 2, [CAT_GE_NATURE]),
+            ("090060001", "醫療與生活", 2, [CAT_GE_NATURE]),
+            ("090060011", "醫療與生活", 2, [CAT_GE_NATURE]),
+            ("090060021", "醫療與生活", 2, [CAT_GE_NATURE]),
+            ("090088001", "預防醫學與校園健康", 2, [CAT_GE_NATURE]),
+            ("090104001", "長期照護與健康產業發展", 2, [CAT_GE_NATURE]),
+            ("090106001", "健康與生活", 2, [CAT_GE_NATURE]),
+            ("090109001", "仰望星空探索宇宙", 2, [CAT_GE_NATURE]),
+            ("090111001", "環境科學與環境保護", 2, [CAT_GE_NATURE]),
+            ("090114001", "數位轉型的智權與風險管理", 2, [CAT_GE_NATURE]),
+            ("993015001", "衛生保健", 2, [CAT_GE_NATURE]),
+            # ── 核心自然通識（自然通識 + 核心通識自然）────
+            ("043016001", "生活中的生命科學", 3, [CAT_GE_NATURE, CAT_CORE_NATURE]),
+            ("043016011", "生活中的生命科學", 3, [CAT_GE_NATURE, CAT_CORE_NATURE]),
+            ("043024001", "物理學史與人類文明", 3, [CAT_GE_NATURE, CAT_CORE_NATURE]),
+            ("043025001", "大腦與我", 3, [CAT_GE_NATURE, CAT_CORE_NATURE]),
+            ("043025011", "大腦與我", 3, [CAT_GE_NATURE, CAT_CORE_NATURE]),
+            ("043027001", "科技與人文社會", 3, [CAT_GE_NATURE, CAT_CORE_NATURE]),
+            ("043030001", "數學、邏輯與人生", 3, [CAT_GE_NATURE, CAT_CORE_NATURE]),
+            ("043031001", "心理與生活", 3, [CAT_GE_NATURE, CAT_CORE_NATURE]),
+            # ── 書院通識 ──────────────────────────────────
+            ("045023001", "國小學生課後關懷與輔導", 1, [CAT_GE_COLLEGE]),
+            ("045024011", "圖書館實務及創意管理", 2, [CAT_GE_COLLEGE]),
+            ("045025001", "動物權：理論與實踐", 1, [CAT_GE_COLLEGE]),
+            ("045062001", "自主實踐學習２", 2, [CAT_GE_COLLEGE]),
+            ("045064001", "自主實踐學習１－１", 1, [CAT_GE_COLLEGE]),
+            ("045065001", "自主實踐學習１－２", 1, [CAT_GE_COLLEGE]),
+            # ── 資訊通識 ──────────────────────────────────
+            ("046001001", "程式設計概論", 3, [CAT_GE_INFO]),
+            ("046001011", "程式設計概論", 3, [CAT_GE_INFO]),
+            ("046001021", "程式設計概論", 3, [CAT_GE_INFO]),
+            ("046001031", "程式設計概論", 3, [CAT_GE_INFO]),
+            ("046005001", "程式設計應用專題", 3, [CAT_GE_INFO]),
+            ("046006011", "計算思維與人工智慧", 3, [CAT_GE_INFO]),
+            ("046006031", "計算思維與人工智慧", 3, [CAT_GE_INFO]),
+            ("046008001", "設計思維與軟體系統專案管理", 3, [CAT_GE_INFO]),
+            ("046008011", "設計思維與軟體系統專案管理", 3, [CAT_GE_INFO]),
+            ("046008021", "設計思維與軟體系統專案管理", 3, [CAT_GE_INFO]),
+            ("046009001", "生成式人工智慧時代的生活紀實", 3, [CAT_GE_INFO]),
+            ("046010001", "生活中的未來語言：數學、Python與AI", 3, [CAT_GE_INFO]),
+            ("090129001", "Inkscape向量繪圖與雲端開放資源應用", 2, [CAT_GE_INFO]),
+            # ── 體育（credits=0，不計入畢業學分）────────
+            ("002008011", "體育[男女合班]—健康體適能", 0, [CAT_PE]),
+            ("002009001", "體育[男女合班]—適應體育", 0, [CAT_PE]),
+            ("002012011", "體育[男]—羽球初級", 0, [CAT_PE]),
+            ("002012021", "體育[男]—羽球初級", 0, [CAT_PE]),
+            ("002021011", "體育[男]—籃球初級", 0, [CAT_PE]),
+            ("002021021", "體育[男]—籃球初級", 0, [CAT_PE]),
+            ("002051001", "體育[男]—羽球中級", 0, [CAT_PE]),
+            ("002060001", "體育[男]—游泳初級（捷泳）", 0, [CAT_PE]),
+            ("002062011", "體育[女]—羽球初級", 0, [CAT_PE]),
+            ("002062031", "體育[女]—羽球初級", 0, [CAT_PE]),
+            ("002062041", "體育[女]—羽球初級", 0, [CAT_PE]),
+            ("002065011", "體育[女]—桌球初級", 0, [CAT_PE]),
+            ("002065021", "體育[女]—桌球初級", 0, [CAT_PE]),
+            ("002071011", "體育[女]—籃球初級", 0, [CAT_PE]),
+            ("002076011", "體育[女]—游泳初級", 0, [CAT_PE]),
+            ("002097021", "體育[女]—排球初級", 0, [CAT_PE]),
+            ("002112001", "體育[女]—女體適能", 0, [CAT_PE]),
+            ("002112011", "體育[女]—女體適能", 0, [CAT_PE]),
+            ("002113011", "體育[女]—籃球中級", 0, [CAT_PE]),
+            ("002115001", "體育[女]—羽球中級", 0, [CAT_PE]),
+            ("002151001", "體育[女]—排球中級", 0, [CAT_PE]),
+            ("002301001", "體育[男女合班]—網球初級", 0, [CAT_PE]),
+            ("002301021", "體育[男女合班]—網球初級", 0, [CAT_PE]),
+            ("002301031", "體育[男女合班]—網球初級", 0, [CAT_PE]),
+            ("002303011", "體育[男女合班]—桌球初級", 0, [CAT_PE]),
+            ("002303021", "體育[男女合班]—桌球初級", 0, [CAT_PE]),
+            ("002303041", "體育[男女合班]—桌球初級", 0, [CAT_PE]),
+            ("002303051", "體育[男女合班]—桌球初級", 0, [CAT_PE]),
+            ("002303061", "體育[男女合班]—桌球初級", 0, [CAT_PE]),
+            ("002303071", "體育[男女合班]—桌球初級", 0, [CAT_PE]),
+            ("002303081", "體育[男女合班]—桌球初級", 0, [CAT_PE]),
+            ("002305021", "體育[男女合班]—慢速壘球初級", 0, [CAT_PE]),
+            ("002305031", "體育[男女合班]—慢速壘球初級", 0, [CAT_PE]),
+            ("002311021", "體育[男女合班]—足球初級", 0, [CAT_PE]),
+            ("002311031", "體育[男女合班]—足球初級", 0, [CAT_PE]),
+            ("002311041", "體育[男女合班]—足球初級", 0, [CAT_PE]),
+            ("002312001", "體育[男]—男體適能", 0, [CAT_PE]),
+            ("002325011", "體育[男女合班]—排球中級", 0, [CAT_PE]),
+            ("002327001", "體育[男女合班]—排球初級", 0, [CAT_PE]),
+            ("002327011", "體育[男女合班]—排球初級", 0, [CAT_PE]),
+            ("002328001", "體育[男女合班]—足球中級", 0, [CAT_PE]),
+            ("002329001", "體育[男]—籃球中級", 0, [CAT_PE]),
+            ("002334001", "體育[男女合班]—排球高級", 0, [CAT_PE]),
+            ("002335001", "體育[男女合班]—桌球中級", 0, [CAT_PE]),
+            ("002335011", "體育[男女合班]—桌球中級", 0, [CAT_PE]),
+            ("002335021", "體育[男女合班]—桌球中級", 0, [CAT_PE]),
+            ("002337001", "體育[男女合班]—羽球中級", 0, [CAT_PE]),
+            ("002337011", "體育[男女合班]—羽球中級", 0, [CAT_PE]),
+            ("002338001", "體育[男女合班]—游泳中級", 0, [CAT_PE]),
+            ("002339001", "體育[男女合班]—木球初級", 0, [CAT_PE]),
+            ("002339011", "體育[男女合班]—木球初級", 0, [CAT_PE]),
+            ("002339031", "體育[男女合班]—木球初級", 0, [CAT_PE]),
+            ("002339041", "體育[男女合班]—木球初級", 0, [CAT_PE]),
+            ("002340011", "體育[男女合班]—網球中級", 0, [CAT_PE]),
+            ("002340021", "體育[男女合班]—網球中級", 0, [CAT_PE]),
+            ("002341001", "體育[男女合班]—彼拉提斯墊上技巧", 0, [CAT_PE]),
+            ("002342001", "體育[男女合班]—高低衝擊有氧初級", 0, [CAT_PE]),
+            ("002343001", "體育[男女合班]—橄欖球初級", 0, [CAT_PE]),
+            ("002343011", "體育[男女合班]—橄欖球初級", 0, [CAT_PE]),
+            ("002346001", "體育[男女合班]—鐵人三項初級", 0, [CAT_PE]),
+            ("002347001", "體育[男女合班]—健走", 0, [CAT_PE]),
+            ("002347021", "體育[男女合班]—健走", 0, [CAT_PE]),
+            ("002348001", "體育[男女合班]—跆拳道與防身術初級", 0, [CAT_PE]),
+            ("002348011", "體育[男女合班]—跆拳道與防身術初級", 0, [CAT_PE]),
+            ("002350001", "體育[男女合班]—武術初級", 0, [CAT_PE]),
+            ("002350011", "體育[男女合班]—武術初級", 0, [CAT_PE]),
+            ("002355001", "體育[男女合班]—武術中級", 0, [CAT_PE]),
+            ("002361011", "體育[男女合班]—籃球初級", 0, [CAT_PE]),
+            ("002361021", "體育[男女合班]—籃球初級", 0, [CAT_PE]),
+            ("002362001", "體育[男女合班]—瑜珈初級", 0, [CAT_PE]),
+            ("002362011", "體育[男女合班]—瑜珈初級", 0, [CAT_PE]),
+            ("002362021", "體育[男女合班]—瑜珈初級", 0, [CAT_PE]),
+            ("002363001", "體育[男女合班]—爵士舞初級", 0, [CAT_PE]),
+            ("002366001", "體育[男女合班]—羽球初級", 0, [CAT_PE]),
+            ("002366011", "體育[男女合班]—羽球初級", 0, [CAT_PE]),
+            ("002366041", "體育[男女合班]—羽球初級", 0, [CAT_PE]),
+            ("002366071", "體育[男女合班]—羽球初級", 0, [CAT_PE]),
+            ("002367001", "體育[男女合班]—慢速壘球中級", 0, [CAT_PE]),
+            ("002368001", "體育[男女合班]—定向越野", 0, [CAT_PE]),
+            ("002368011", "體育[男女合班]—定向越野", 0, [CAT_PE]),
+            ("002368021", "體育[男女合班]—定向越野", 0, [CAT_PE]),
+            ("002369001", "體育[男女合班]—現代舞初級", 0, [CAT_PE]),
+            ("002371001", "體育[男女合班]—國際標準舞初級（恰恰、探戈）", 0, [CAT_PE]),
+            ("002371011", "體育[男女合班]—國際標準舞初級（恰恰、探戈）", 0, [CAT_PE]),
+            ("002373001", "體育[男女合班]—田徑", 0, [CAT_PE]),
+            ("002373011", "體育[男女合班]—田徑", 0, [CAT_PE]),
+            ("002374001", "體育[男女合班]—田徑運動入門", 0, [CAT_PE]),
+            ("002374011", "體育[男女合班]—田徑運動入門", 0, [CAT_PE]),
+            ("002377001", "體育[男女合班]—綜合體能訓練", 0, [CAT_PE]),
+            ("002378001", "體育[男女合班]—五人制足球", 0, [CAT_PE]),
+            ("002378011", "體育[男女合班]—五人制足球", 0, [CAT_PE]),
+            ("002380001", "體育[男女合班]—民俗體育", 0, [CAT_PE]),
+            ("002380011", "體育[男女合班]—民俗體育", 0, [CAT_PE]),
+            ("002380021", "體育[男女合班]—民俗體育", 0, [CAT_PE]),
+            ("002383001", "體育[男女合班]—羽球高級", 0, [CAT_PE]),
+            ("002384001", "體育[男女合班]—桌球高級", 0, [CAT_PE]),
+            ("002386001", "體育[男女合班]—游泳初級（捷泳）", 0, [CAT_PE]),
+            ("002387001", "體育[男女合班]—游泳初級", 0, [CAT_PE]),
+            ("002387011", "體育[男女合班]—游泳初級", 0, [CAT_PE]),
+            ("002390001", "體育[男女合班]—活力有氧初級", 0, [CAT_PE]),
+            ("002390011", "體育[男女合班]—活力有氧初級", 0, [CAT_PE]),
         ]
 
-        for course_id, name, credits, cat_id in courses_to_seed:
-            course = db.query(Course).filter(Course.course_id == course_id).first()
+        for course_id, name, credits, cat_ids in courses_to_seed:
+            course = db.query(Course).filter(
+                Course.course_id == course_id
+            ).first()
             if not course:
-                course = Course(course_id=course_id, course_name=name, credits=credits)
+                course = Course(
+                    course_id=course_id,
+                    course_name=name,
+                    credits=credits
+                )
                 db.add(course)
                 db.flush()
-                print(f"Course {name} created.")
-            
-            # Map course to category
-            mapping = db.query(CourseCategoryMapping).filter(
-                CourseCategoryMapping.course_id == course_id,
-                CourseCategoryMapping.category_id == cat_id
-            ).first()
-            if not mapping:
-                mapping = CourseCategoryMapping(course_id=course_id, category_id=cat_id)
-                db.add(mapping)
-                print(f"Mapped {name} to Category ID {cat_id}.")
+                print(f"  Course {name} created.")
+
+            for cat_id in cat_ids:
+                mapping = db.query(CourseCategoryMapping).filter(
+                    CourseCategoryMapping.course_id == course_id,
+                    CourseCategoryMapping.category_id == cat_id
+                ).first()
+                if not mapping:
+                    mapping = CourseCategoryMapping(
+                        course_id=course_id,
+                        category_id=cat_id
+                    )
+                    db.add(mapping)
         db.flush()
 
-        # 6. Seed Required Compulsory Courses for Admission Year 110
-        # In the checklist, there are 19 core courses that make up 58 credits total
+        # ════════════════════════════════════════════════════
+        # 4. REQUIRED COURSES（入學年 111）
+        # ════════════════════════════════════════════════════
         required_course_ids = [
-            "703001001", "703002001", "703003001", "703004001",
-            "703005001", "703006001", "703007001", "703008001",
-            "703009001", "703010001", "703011001", "703012002",
-            "703013002", "703014002", "703015002", "703016002",
-            "703017002", "703013001", "703014001"
+            # 一般必修 15 門
+            "703001001", "000713021", "000713022", "703049001", "703050001",
+            "703002001", "703009001", "703008001", "703017001", "703007001",
+            "703022001", "703014001", "703015001", "703019001", "703016001",
+            # 群A
+            "703044001", "703046001", "703047001",
+            # 群B
+            "703038001", "703027001", "703039001", "703055001", "703025001", "703060001",
+            # 群C
+            "703059001", "703053001", "703010001", "703042001",
         ]
-        
         for course_id in required_course_ids:
             rc = db.query(RequiredCourse).filter(
-                RequiredCourse.admission_year == 110,
+                RequiredCourse.admission_year == 111,
                 RequiredCourse.course_id == course_id
             ).first()
             if not rc:
-                rc = RequiredCourse(admission_year=110, course_id=course_id)
+                rc = RequiredCourse(admission_year=111, course_id=course_id)
                 db.add(rc)
-                print(f"Added RequiredCourse {course_id} for year 110.")
+                print(f"  RequiredCourse {course_id} added.")
         db.flush()
 
-        # 7. Seed Student Course Records (excluding calculation network & compilers to simulate missing 2 courses)
-        # We will populate student's grades from freshman to senior year (110-1 to 112-2)
+        # ════════════════════════════════════════════════════
+        # 5. STUDENTS + USERS
+        # ════════════════════════════════════════════════════
+        students_data = [
+            ("111001001", "王大明", 111, "資訊科學系"),  # 完全符合畢業規定
+            ("111001002", "李小華", 111, "資訊科學系"),  # 缺兩門必修＋一門英文
+            ("111001003", "張美玲", 111, "資訊科學系"),  # 通識達標但缺核心通識條件
+            ("111001004", "陳志豪", 111, "資訊科學系"),  # 選修缺3學分＋缺社會通識
+        ]
+        for student_id, name, year, dept in students_data:
+            student = db.query(Student).filter(
+                Student.student_id == student_id
+            ).first()
+            if not student:
+                student = Student(
+                    student_id=student_id,
+                    name=name,
+                    admission_year=year,
+                    department=dept
+                )
+                db.add(student)
+                db.flush()
+                print(f"  Student {name} created.")
+
+            user = db.query(User).filter(User.username == student_id).first()
+            if not user:
+                user = User(
+                    student_id=student_id,
+                    username=student_id,
+                    password_hash=pwd_context.hash("password123")
+                )
+                db.add(user)
+                db.flush()
+                print(f"  User {student_id} created.")
+
+        # ════════════════════════════════════════════════════
+        # 6. STUDENT COURSE RECORDS
+        # 格式：(student_id, semester, course_id, grade, is_passed)
+        # ════════════════════════════════════════════════════
         records_data = [
-            # Semester, Course ID, Grade, IsPassed
-            ("110學年度第一學期", "703001001", 85, True), # A
-            ("110學年度第一學期", "703002001", 77, True), # B+
-            ("110學年度第一學期", "000101001", 80, True), # A-
-            ("110學年度第一學期", "000311020", 75, True), # Pass/75
-            ("110學年度第一學期", "000201001", 92, True), # PE Pass
-            
-            ("110學年度第二學期", "703003001", 90, True), # A+
-            ("110學年度第二學期", "703004001", 73, True), # B
-            ("110學年度第二學期", "000315011", 85, True), # A
-            ("110學年度第二學期", "000102001", 70, True), # B-
-            ("110學年度第二學期", "000202001", 88, True), # PE Pass
-            ("110學年度第二學期", "703012002", 82, True), # A-
-            ("110學年度第二學期", "703013002", 85, True), # A
-            ("110學年度第二學期", "000325001", 85, True), # A
-            
-            ("111學年度第一學期", "703005001", 77, True), # B+
-            ("111學年度第一學期", "703006001", 68, True), # C+
-            ("111學年度第一學期", "703007001", 82, True),
-            ("111學年度第一學期", "703021001", 85, True), # VR (Elective)
-            ("111學年度第一學期", "000318041", 75, True), # Art
-            ("111學年度第一學期", "703014002", 73, True), # Prob
-            ("111學年度第一學期", "703015002", 85, True), # Digital Lab
-            ("111學年度第一學期", "000326001", 77, True),
-            
-            ("111學年度第二學期", "703008001", 80, True), # Algo
-            ("111學年度第二學期", "703009001", 60, True), # OS
-            ("111學年度第二學期", "703022001", 73, True), # DB (Elective)
-            ("111學年度第二學期", "000312015", 75, True),
-            ("111學年度第二學期", "000203001", 90, True), # PE Pass
-            ("111學年度第二學期", "703016002", 70, True), # SysProg
-            ("111學年度第二學期", "000327001", 80, True),
-            
-            ("112學年度第一學期", "703010001", 70, True), # Comp Architecture
-            ("112學年度第一學期", "703023001", 90, True), # AI (Elective)
-            ("112學年度第一學期", "703024001", 85, True), # Web (Elective)
-            ("112學年度第一學期", "000314052", 75, True),
-            ("112學年度第一學期", "000204001", 85, True), # PE Pass
-            ("112學年度第一學期", "703017002", 80, True), # CS Project I
-            ("112學年度第一學期", "703030002", 85, True), # CS Project II (Elective)
-            ("112學年度第一學期", "000328001", 75, True),
-            
-            ("112學年度第二學期", "703011001", 80, True), # SoftEng
-            ("112學年度第二學期", "703025001", 85, True), # ML (Elective)
-            ("112學年度第二學期", "703026001", 77, True), # Cloud (Elective)
-            ("112學年度第二學期", "000320011", 85, True),
-            ("112學年度第二學期", "703027001", 80, True), # IoT (Elective)
-            ("112學年度第二學期", "703028001", 77, True), # BigData (Elective)
+            # ────────────────────────────────────────────────
+            # 學生1：王大明（111001001）完全符合畢業規定
+            # ────────────────────────────────────────────────
+            # 一般必修 15 門
+            ("111001001", "111/1", "703001001", 88, True),
+            ("111001001", "111/1", "000713021", 75, True),
+            ("111001001", "111/2", "000713022", 72, True),
+            ("111001001", "111/2", "703049001", 85, True),
+            ("111001001", "112/1", "703050001", 90, True),
+            ("111001001", "112/1", "703002001", 78, True),
+            ("111001001", "112/1", "703009001", 82, True),
+            ("111001001", "112/2", "703008001", 76, True),
+            ("111001001", "112/2", "703017001", 70, True),
+            ("111001001", "112/2", "703007001", 68, True),
+            ("111001001", "113/1", "703022001", 80, True),
+            ("111001001", "113/1", "703014001", 74, True),
+            ("111001001", "113/1", "703015001", 85, True),
+            ("111001001", "113/2", "703019001", 79, True),
+            ("111001001", "113/2", "703016001", 83, True),
+            # 群A 3 門（超過最低2門，溢出1門算選修）
+            ("111001001", "113/1", "703044001", 88, True),
+            ("111001001", "113/2", "703046001", 84, True),
+            ("111001001", "114/1", "703047001", 90, True),
+            # 群B 2 門（超過最低1門，溢出1門算選修）
+            ("111001001", "112/2", "703038001", 77, True),
+            ("111001001", "113/1", "703027001", 81, True),
+            # 群C 1 門
+            ("111001001", "113/2", "703059001", 75, True),
+            # 英文 2 門
+            ("111001001", "111/1", "032001011", 82, True),
+            ("111001001", "111/2", "032002011", 79, True),
+            # 中文通識
+            ("111001001", "111/2", "031004011", 85, True),
+            # 資訊通識
+            ("111001001", "112/1", "046001001", 78, True),
+            # 自然通識：一般 + 核心
+            ("111001001", "112/2", "043045001", 80, True),
+            ("111001001", "113/1", "043016001", 86, True),
+            # 社會通識：一般 + 核心 + 一般（溢出）
+            ("111001001", "112/1", "042183001", 75, True),
+            ("111001001", "112/2", "042112091", 82, True),
+            ("111001001", "113/2", "042215001", 77, True),
+            # 人文通識：一般 + 核心 + 一般（溢出）
+            ("111001001", "111/2", "041038001", 88, True),
+            ("111001001", "112/1", "041099041", 83, True),
+            ("111001001", "113/1", "041026011", 79, True),
+            # 書院通識
+            ("111001001", "114/1", "045024011", 90, True),
+            # 體育 4 門
+            ("111001001", "111/1", "002008011", 80, True),
+            ("111001001", "111/2", "002301001", 85, True),
+            ("111001001", "112/1", "002366001", 90, True),
+            ("111001001", "112/2", "002362001", 88, True),
+            # Extra courses to meet 128 credits rule
+            ("111001001", "114/1", "043048001", 85, True),
+            ("111001001", "114/1", "043025001", 82, True),
+            ("111001001", "114/1", "042195001", 80, True),
+            ("111001001", "114/1", "042133001", 88, True),
+            ("111001001", "114/2", "041095001", 89, True),
+            ("111001001", "114/2", "041100001", 90, True),
+            ("111001001", "114/2", "045064001", 85, True),
+
+            # ────────────────────────────────────────────────
+            # 學生2：李小華（111001002）缺兩門必修＋一門英文
+            # 缺：703022001（演算法）、703016001（作業系統）、英文只修一門
+            # ────────────────────────────────────────────────
+            # 一般必修 13 門（缺演算法、作業系統）
+            ("111001002", "111/1", "703001001", 85, True),
+            ("111001002", "111/1", "000713021", 70, True),
+            ("111001002", "111/2", "000713022", 68, True),
+            ("111001002", "111/2", "703049001", 82, True),
+            ("111001002", "112/1", "703050001", 88, True),
+            ("111001002", "112/1", "703002001", 74, True),
+            ("111001002", "112/1", "703009001", 79, True),
+            ("111001002", "112/2", "703008001", 73, True),
+            ("111001002", "112/2", "703017001", 67, True),
+            ("111001002", "112/2", "703007001", 65, True),
+            # 703022001 演算法 → 缺
+            ("111001002", "113/1", "703014001", 71, True),
+            ("111001002", "113/1", "703015001", 83, True),
+            ("111001002", "113/2", "703019001", 76, True),
+            # 703016001 作業系統 → 缺
+            # 群A 2 門
+            ("111001002", "113/1", "703044001", 85, True),
+            ("111001002", "113/2", "703046001", 80, True),
+            # 群B 1 門
+            ("111001002", "112/2", "703038001", 75, True),
+            # 群C 1 門
+            ("111001002", "113/2", "703059001", 72, True),
+            # 英文 1 門（缺一門）
+            ("111001002", "111/1", "032001021", 78, True),
+            # 中文通識
+            ("111001002", "111/2", "031007011", 83, True),
+            # 資訊通識
+            ("111001002", "112/1", "046001011", 76, True),
+            # 自然通識：一般 + 核心
+            ("111001002", "112/2", "043048001", 78, True),
+            ("111001002", "113/1", "043025001", 82, True),
+            # 社會通識：一般 + 核心
+            ("111001002", "112/1", "042195001", 74, True),
+            ("111001002", "112/2", "042133001", 80, True),
+            # 人文通識：一般 + 核心
+            ("111001002", "111/2", "041095001", 85, True),
+            ("111001002", "112/1", "041100001", 81, True),
+            # 書院通識
+            ("111001002", "114/1", "045064001", 88, True),
+            # 體育 4 門
+            ("111001002", "111/1", "002012011", 82, True),
+            ("111001002", "111/2", "002303011", 85, True),
+            ("111001002", "112/1", "002366011", 88, True),
+            ("111001002", "112/2", "002362011", 90, True),
+
+            # ────────────────────────────────────────────────
+            # 學生3：張美玲（111001003）通識28學分達標，但核心通識只有自然類
+            # 缺：未修核心社會或核心人文（不符合「兩種不同類別」條件）
+            # ────────────────────────────────────────────────
+            # 一般必修 15 門
+            ("111001003", "111/1", "703001001", 90, True),
+            ("111001003", "111/1", "000713021", 78, True),
+            ("111001003", "111/2", "000713022", 75, True),
+            ("111001003", "111/2", "703049001", 88, True),
+            ("111001003", "112/1", "703050001", 92, True),
+            ("111001003", "112/1", "703002001", 80, True),
+            ("111001003", "112/1", "703009001", 84, True),
+            ("111001003", "112/2", "703008001", 77, True),
+            ("111001003", "112/2", "703017001", 72, True),
+            ("111001003", "112/2", "703007001", 70, True),
+            ("111001003", "113/1", "703022001", 83, True),
+            ("111001003", "113/1", "703014001", 76, True),
+            ("111001003", "113/1", "703015001", 87, True),
+            ("111001003", "113/2", "703019001", 81, True),
+            ("111001003", "113/2", "703016001", 85, True),
+            # 群A 2 門
+            ("111001003", "113/1", "703044001", 90, True),
+            ("111001003", "113/2", "703046001", 86, True),
+            # 群B 1 門
+            ("111001003", "113/1", "703027001", 79, True),
+            # 群C 1 門
+            ("111001003", "113/2", "703053001", 77, True),
+            # 英文 2 門
+            ("111001003", "111/1", "032001031", 85, True),
+            ("111001003", "111/2", "032002031", 82, True),
+            # 中文通識
+            ("111001003", "111/2", "031008011", 87, True),
+            # 資訊通識
+            ("111001003", "112/1", "046006011", 80, True),
+            # 自然通識：一般 2 門 + 核心自然 2 門（核心只有「自然」類）
+            ("111001003", "112/1", "043045001", 78, True),
+            ("111001003", "112/2", "043048001", 75, True),
+            ("111001003", "113/1", "043016001", 83, True),
+            ("111001003", "113/2", "043025001", 80, True),
+            # 社會通識：一般 2 門（無核心社會）
+            ("111001003", "112/1", "042183001", 76, True),
+            ("111001003", "112/2", "042215001", 79, True),
+            # 人文通識：一般 2 門（無核心人文）
+            ("111001003", "111/2", "041038001", 84, True),
+            ("111001003", "112/1", "041026011", 77, True),
+            # 書院通識
+            ("111001003", "114/1", "045024011", 88, True),
+            # 體育 4 門
+            ("111001003", "111/1", "002021011", 85, True),
+            ("111001003", "111/2", "002301021", 88, True),
+            ("111001003", "112/1", "002366041", 90, True),
+            ("111001003", "112/2", "002362021", 85, True),
+
+            # ────────────────────────────────────────────────
+            # 學生4：陳志豪（111001004）選修缺3學分＋缺社會通識
+            # 群A/B/C 恰好最低，無溢出選修學分
+            # 完全沒修社會通識
+            # ────────────────────────────────────────────────
+            # 一般必修 15 門
+            ("111001004", "111/1", "703001001", 82, True),
+            ("111001004", "111/1", "000713021", 68, True),
+            ("111001004", "111/2", "000713022", 65, True),
+            ("111001004", "111/2", "703049001", 80, True),
+            ("111001004", "112/1", "703050001", 85, True),
+            ("111001004", "112/1", "703002001", 72, True),
+            ("111001004", "112/1", "703009001", 77, True),
+            ("111001004", "112/2", "703008001", 70, True),
+            ("111001004", "112/2", "703017001", 65, True),
+            ("111001004", "112/2", "703007001", 63, True),
+            ("111001004", "113/1", "703022001", 78, True),
+            ("111001004", "113/1", "703014001", 70, True),
+            ("111001004", "113/1", "703015001", 82, True),
+            ("111001004", "113/2", "703019001", 75, True),
+            ("111001004", "113/2", "703016001", 80, True),
+            # 群A 恰好 2 門（無溢出）
+            ("111001004", "113/1", "703044001", 85, True),
+            ("111001004", "113/2", "703046001", 80, True),
+            # 群B 恰好 1 門（無溢出）
+            ("111001004", "112/2", "703038001", 74, True),
+            # 群C 1 門
+            ("111001004", "113/2", "703042001", 71, True),
+            # 英文 2 門
+            ("111001004", "111/1", "032001041", 76, True),
+            ("111001004", "111/2", "032002041", 73, True),
+            # 中文通識
+            ("111001004", "111/2", "031013011", 80, True),
+            # 資訊通識
+            ("111001004", "112/1", "046008001", 75, True),
+            # 自然通識：一般 + 核心
+            ("111001004", "112/2", "043033001", 72, True),
+            ("111001004", "113/1", "043027001", 78, True),
+            # 社會通識：完全沒修
+            # 人文通識：一般 + 核心
+            ("111001004", "111/2", "041125001", 82, True),
+            ("111001004", "112/1", "041123001", 79, True),
+            # 書院通識
+            ("111001004", "114/1", "045062001", 85, True),
+            # 體育 4 門
+            ("111001004", "111/1", "002008011", 80, True),
+            ("111001004", "111/2", "002303021", 83, True),
+            ("111001004", "112/1", "002366071", 88, True),
+            ("111001004", "112/2", "002362001", 82, True),
         ]
 
-        for sem, course_id, grade, passed in records_data:
+        for student_id, semester, course_id, grade, passed in records_data:
             rec = db.query(StudentCourseRecord).filter(
                 StudentCourseRecord.student_id == student_id,
                 StudentCourseRecord.course_id == course_id
@@ -269,15 +855,15 @@ def seed():
                 rec = StudentCourseRecord(
                     student_id=student_id,
                     course_id=course_id,
-                    semester=sem,
+                    semester=semester,
                     grade=grade,
                     is_passed=passed
                 )
                 db.add(rec)
-                print(f"Added Course Record for {course_id} in {sem}.")
-        
+                print(f"  Record {student_id} / {course_id} added.")
+
         db.commit()
-        print("Database seeded successfully with all matching data!")
+        print("\nDatabase seeded successfully!")
 
     except Exception as e:
         db.rollback()
@@ -285,6 +871,7 @@ def seed():
         raise e
     finally:
         db.close()
+
 
 if __name__ == "__main__":
     seed()

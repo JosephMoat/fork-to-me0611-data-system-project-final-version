@@ -65,8 +65,12 @@ class CreditCheckService:
             if rule.min_courses is not None:
                 course_passed = passed_courses >= rule.min_courses
 
+            effective_credits = earned_credits
+            if rule.category_id in [6, 7, 8, 9, 10]:
+                effective_credits = min(earned_credits, 7)
+
             if rule.min_credits is not None:
-                credit_passed = earned_credits >= rule.min_credits
+                credit_passed = effective_credits >= rule.min_credits
 
             category = self.repository.get_category_by_id(rule.category_id)
 
@@ -96,11 +100,23 @@ class CreditCheckService:
                 "missing_courses_count": missing_courses_count,
 
                 "required_credits": rule.min_credits,
-                "earned_credits": earned_credits,
+                "earned_credits": effective_credits,  # Capped GE credits
                 "missing_credits": missing_credits,
 
                 "is_passed": course_passed and credit_passed
             })
+
+        # Core GE logic: Must pass at least 2 of 3 Core GE categories (12, 13, 14)
+        core_ge_passed_count = sum(1 for r in results if r["category_id"] in [12, 13, 14] and r["passed_courses"] >= 1)
+        
+        for r in results:
+            if r["category_id"] in [12, 13, 14]:
+                if core_ge_passed_count >= 2:
+                    r["is_passed"] = True
+                    r["missing_courses_count"] = 0
+                else:
+                    if r["passed_courses"] == 0:
+                        r["is_passed"] = False
 
         return {
             "student_id": student.student_id,

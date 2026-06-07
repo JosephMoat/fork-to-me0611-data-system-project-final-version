@@ -44,7 +44,9 @@ class CreditCheckRepository:
     def get_required_courses_by_admission_year(self, admission_year: int):
         return (
             self.db.query(RequiredCourse)
+            .join(CourseCategoryMapping, RequiredCourse.course_id == CourseCategoryMapping.course_id)
             .filter(RequiredCourse.admission_year == admission_year)
+            .filter(CourseCategoryMapping.category_id == 1)
             .all()
         )
 
