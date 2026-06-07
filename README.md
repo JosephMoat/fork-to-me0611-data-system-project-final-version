@@ -34,16 +34,25 @@
 
 ## 🛠️ 本地執行指南 (Local Setup)
 
-### 1. 啟動後端 (Backend)
+### 方法一：使用 Docker 快速啟動 (推薦)
+透過 Docker，你可以一鍵啟動完整的前後端服務，無須設定環境：
+```bash
+docker-compose up --build -d
+```
+啟動後，瀏覽器開啟 `http://localhost:3000` 即可使用系統。(後端 API 會自動在 `http://localhost:8000` 運行)。
+
+---
+
+### 方法二：手動啟動
+#### 1. 啟動後端 (Backend)
 ```bash
 cd dbms_final_backend
 pip install -r requirements.txt
 python seed.py # 初始化資料庫與規則
 python -m uvicorn app.main:app --reload --port 8000
 ```
-*(註：若 Windows 系統 Port 8000 被 PID 4 (System) 佔用，可改為 `--port 8001` 並同步修改前端 `api.ts` 的 baseURL)*
 
-### 2. 啟動前端 (Frontend)
+#### 2. 啟動前端 (Frontend)
 ```bash
 cd graduation-credit-verification-system
 npm install

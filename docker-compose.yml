@@ -1,38 +1,20 @@
 version: '3.8'
 
 services:
-  db:
-    image: mysql:8.0
-    container_name: graduation-db
-    restart: always
-    environment:
-      MYSQL_DATABASE: db
-      MYSQL_ROOT_PASSWORD: password
-    ports:
-      - "3306:3306"
-    volumes:
-      - mysql-data:/var/lib/mysql
-
   backend:
     build:
       context: ./dbms_final_backend
-    container_name: graduation-backend
     ports:
       - "8000:8000"
+    volumes:
+      - ./dbms_final_backend/sql_app.db:/app/sql_app.db
     environment:
-      - DATABASE_URL=mysql+pymysql://root:password@db:3306/db
-      - SECRET_KEY=your-secret-key
-    depends_on:
-      - db
+      - PYTHONUNBUFFERED=1
 
   frontend:
     build:
       context: ./graduation-credit-verification-system
-    container_name: graduation-frontend
     ports:
       - "3000:80"
     depends_on:
       - backend
-
-volumes:
-  mysql-data:
