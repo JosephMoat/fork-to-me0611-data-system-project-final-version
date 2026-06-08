@@ -12,7 +12,7 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def normalize_database_url(self):
-        database_url = self.DATABASE_URL or self.MYSQL_URL
+        database_url = self.MYSQL_URL or self.DATABASE_URL
 
         if not database_url:
             raise ValueError("DATABASE_URL or MYSQL_URL must be set")
