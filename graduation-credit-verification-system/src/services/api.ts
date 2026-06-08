@@ -5,9 +5,14 @@ import {
   initialUploadHistory
 } from '../mock/data';
 
+const runtimeApiUrl = window.__APP_CONFIG__?.VITE_API_URL?.trim();
+const railwayBackendUrl = window.location.hostname.endsWith('.up.railway.app')
+  ? 'https://backend-production-fe197.up.railway.app'
+  : '';
+
 // Create the real Axios instance pointing to the FastAPI backend
 export const apiClient = axios.create({
-  baseURL: window.__APP_CONFIG__?.VITE_API_URL || import.meta.env.VITE_API_URL || '/api',
+  baseURL: runtimeApiUrl || import.meta.env.VITE_API_URL || railwayBackendUrl || '/api',
   headers: {
     'Content-Type': 'application/json',
   },
