@@ -39,6 +39,7 @@ Backend variables:
 
 ```env
 MYSQL_URL=${{MySQL.MYSQL_URL}}
+PORT=8000
 SECRET_KEY=replace-with-a-long-random-secret
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=60
@@ -67,6 +68,7 @@ Frontend variables:
 ```env
 PORT=80
 BACKEND_HOST=backend.railway.internal
+BACKEND_PORT=8000
 ```
 
 The frontend Nginx config proxies `/api/*` to:
