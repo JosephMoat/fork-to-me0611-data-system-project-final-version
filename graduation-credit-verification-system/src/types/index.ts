@@ -57,6 +57,6 @@ export interface StudentDashboard {
     elective: { completed: number; target: number };
     general: { completed: number; target: number };
     pe: { completed: number; target: number }; // standard pe is measured in semesters / units
-    english: { completed: boolean; target: string };
+    english: { completed: boolean; target: string | number };
   };
 }

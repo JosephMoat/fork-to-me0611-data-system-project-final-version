@@ -5,7 +5,7 @@ import { graduationService } from '../services/api';
 
 export default function Login() {
   const navigate = useNavigate();
-  const [studentId, setStudentId] = useState('110306078');
+  const [studentId, setStudentId] = useState('111001001');
   const [password, setPassword] = useState('password123');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);

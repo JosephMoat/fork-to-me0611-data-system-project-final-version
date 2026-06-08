@@ -7,7 +7,7 @@ import {
 
 // Create the real Axios instance pointing to the FastAPI backend
 export const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000', // Dynamic URL for Docker support
+  baseURL: import.meta.env.VITE_API_URL || '/api',
   headers: {
     'Content-Type': 'application/json',
   },
