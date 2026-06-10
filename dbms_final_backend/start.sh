@@ -31,6 +31,10 @@ if [ "${RUN_SEED:-false}" = "true" ]; then
   python seed.py
 fi
 
+if [ "${RUN_ENSURE_DEMO_ACCOUNT:-true}" = "true" ]; then
+  python ensure_demo_account.py
+fi
+
 # Start the FastAPI server.
 # Railway private networking may require listening on IPv6 (::).
 exec uvicorn app.main:app --host "${BIND_HOST:-0.0.0.0}" --port "${PORT:-8000}"
