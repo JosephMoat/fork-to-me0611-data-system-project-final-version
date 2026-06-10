@@ -71,13 +71,22 @@ export default function Dashboard() {
   // Dynamically calculate graduation risk alerts based on backend credit-check results
   const alertsList = [];
 
-  // 1. Required courses missing
-  if (dashboard.missingRequiredCount > 0) {
+  // 1. Required courses or required credits missing
+  const missingRequiredCredits = dashboard.categoryProgress.required.target - dashboard.categoryProgress.required.completed;
+  if (dashboard.missingRequiredCount > 0 || missingRequiredCredits > 0) {
+    const requiredCourseText = dashboard.missingRequiredCourses && dashboard.missingRequiredCourses.length > 0
+      ? `缺修課程：${dashboard.missingRequiredCourses.map(name => `【${name}】`).join('、')}。`
+      : '';
+    const requiredCreditText = missingRequiredCredits > 0
+      ? `專業必修尚缺 ${missingRequiredCredits} 學分。`
+      : '';
     alertsList.push({
       id: 'required-missing',
       type: 'danger',
-      title: `系必修學科欠修 (${dashboard.missingRequiredCount} 門)`,
-      description: `系統未偵測到以下必修學科的通過紀錄：${dashboard.missingRequiredCourses && dashboard.missingRequiredCourses.length > 0 ? dashboard.missingRequiredCourses.map(name => `【${name}】`).join('、') : "計算機網路、編譯器設計"}，極容易遭遇延畢。`,
+      title: missingRequiredCredits > 0
+        ? `專業必修學分不足 (缺 ${missingRequiredCredits} 學分)`
+        : `系必修學科欠修 (${dashboard.missingRequiredCount} 門)`,
+      description: `${requiredCreditText}${requiredCourseText || '系統偵測到專業必修門檻尚未達成。'}請優先確認必修課程與補修規劃，避免影響畢業資格。`,
       link: '/recommendations',
       linkText: '看推薦安排補修 →',
       icon: 'shield-alert'

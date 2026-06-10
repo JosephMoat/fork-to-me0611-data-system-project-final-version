@@ -594,6 +594,7 @@ def seed():
         # 5. STUDENTS + USERS
         # ════════════════════════════════════════════════════
         students_data = [
+            ("110306078", "聖結石", 111, "資訊科學系"),  # 展示用測試帳號
             ("111001001", "王大明", 111, "資訊科學系"),  # 完全符合畢業規定
             ("111001002", "李小華", 111, "資訊科學系"),  # 缺兩門必修＋一門英文
             ("111001003", "張美玲", 111, "資訊科學系"),  # 通識達標但缺核心通識條件
@@ -845,6 +846,12 @@ def seed():
             ("111001004", "112/1", "002366071", 88, True),
             ("111001004", "112/2", "002362001", 82, True),
         ]
+
+        records_data.extend(
+            ("110306078", semester, course_id, grade, passed)
+            for student_id, semester, course_id, grade, passed in records_data
+            if student_id == "111001001"
+        )
 
         for student_id, semester, course_id, grade, passed in records_data:
             rec = db.query(StudentCourseRecord).filter(

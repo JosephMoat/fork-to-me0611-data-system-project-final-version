@@ -5,7 +5,7 @@ import { graduationService } from '../services/api';
 
 export default function Login() {
   const navigate = useNavigate();
-  const [studentId, setStudentId] = useState('111001001');
+  const [studentId, setStudentId] = useState('110306078');
   const [password, setPassword] = useState('password123');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -53,7 +53,7 @@ export default function Login() {
             <div className="pt-8 space-y-3">
               <h2 className="text-2xl font-bold tracking-tight leading-tight">畢業學分檢核系統</h2>
               <p className="text-sm text-slate-300 leading-relaxed">
-                整合「修課名細規畫、通識與必選修檢定、補修課程推薦、跨棟走動預警」之新世代 SaaS 檢核系統。
+                整合「修課明細規劃、通識與必選修檢定、補修課程推薦」之新世代 SaaS 檢核系統。
               </p>
             </div>
           </div>
