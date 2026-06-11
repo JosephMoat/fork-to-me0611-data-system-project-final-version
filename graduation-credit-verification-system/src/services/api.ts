@@ -184,11 +184,11 @@ export const graduationService = {
     const totalCompleted = completedRequired + completedElective + effectiveGE;
     const totalRequired = 128;
 
-    const requiredRules = (creditCheck.results || []).filter((res: any) => [1, 2].includes(res.category_id));
+    const requiredRules = (creditCheck.results || []).filter((res: any) => [1, 2, 3, 4].includes(res.category_id));
     const requiredTarget = requiredRules.reduce(
       (sum: number, res: any) => sum + (res.required_credits ?? 0),
       0
-    ) || 51;
+    ) || 57;
     const requiredCompleted = requiredRules.reduce((sum: number, res: any) => {
       const earnedCredits = res.earned_credits ?? 0;
       const requiredCredits = res.required_credits;
@@ -198,7 +198,7 @@ export const graduationService = {
     const englishTarget = 6;
     const generalTarget = 28; // 28 total GE, which includes English
     const electiveRule = creditCheck.results?.find((res: any) => res.category_id === 5);
-    const electiveTarget = electiveRule?.required_credits ?? 49;
+    const electiveTarget = electiveRule?.required_credits ?? 28;
     let peTarget = 4;
 
     const categoryProgress = {
