@@ -6,6 +6,7 @@ from app.models.student_course_record import StudentCourseRecord
 from app.models.course import Course
 from app.models.course_category_mapping import CourseCategoryMapping
 from app.models.graduation_rule import GraduationRule
+from app.models.required_course import RequiredCourse
 from app.schemas.recommendation import RecommendedCourse
 
 class RecommendationService:
@@ -19,6 +20,36 @@ class RecommendationService:
         ).first()
         if not student:
             return []
+
+        already_passed_subquery = select(StudentCourseRecord.course_id).where(
+            StudentCourseRecord.student_id == student_id,
+            StudentCourseRecord.is_passed == True
+        )
+
+        missing_required_courses = self.db.execute(
+            select(Course)
+            .join(RequiredCourse, RequiredCourse.course_id == Course.course_id)
+            .join(CourseCategoryMapping, CourseCategoryMapping.course_id == Course.course_id)
+            .where(
+                RequiredCourse.admission_year == student.admission_year,
+                CourseCategoryMapping.category_id == 1,
+                Course.course_id.not_in(already_passed_subquery)
+            )
+            .order_by(Course.course_id)
+        ).scalars().all()
+
+        if missing_required_courses:
+            return [
+                RecommendedCourse(
+                    course_id=course.course_id,
+                    course_name=course.course_name,
+                    category_id=1,
+                    credits=course.credits,
+                    peer_pass_rate=self._get_course_pass_rate(course.course_id),
+                    recommendation_score=2.0
+                )
+                for course in missing_required_courses
+            ]
 
         # 2. 找出學生「已通過」的各類別學分總和
         passed_credits = self.db.execute(
@@ -74,11 +105,6 @@ class RecommendationService:
             pass_rate_map[stat.course_id] = round(rate, 2)
 
         # 5. 撈出符合缺漏類別，且學生尚未通過的候選課程
-        already_passed_subquery = select(StudentCourseRecord.course_id).where(
-            StudentCourseRecord.student_id == student_id,
-            StudentCourseRecord.is_passed == True
-        )
-
         candidate_courses = self.db.execute(
             select(Course, CourseCategoryMapping.category_id)
             .join(CourseCategoryMapping, CourseCategoryMapping.course_id == Course.course_id)
@@ -113,6 +139,18 @@ class RecommendationService:
         recommendations.sort(key=lambda x: (-x.recommendation_score, x.course_id))
         
         return recommendations
+
+    def _get_course_pass_rate(self, course_id: str) -> float:
+        row = self.db.execute(
+            select(
+                func.count(StudentCourseRecord.record_id).label("total_attempts"),
+                func.sum(func.cast(StudentCourseRecord.is_passed, Integer)).label("passed_attempts")
+            )
+            .where(StudentCourseRecord.course_id == course_id)
+        ).first()
+        if not row or not row.total_attempts:
+            return 0.5
+        return round((row.passed_attempts or 0) / row.total_attempts, 2)
 
     def _calculate_weight(self, pass_rate: float) -> float:
         """

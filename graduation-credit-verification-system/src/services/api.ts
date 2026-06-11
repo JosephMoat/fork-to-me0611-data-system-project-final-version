@@ -440,6 +440,11 @@ export const graduationService = {
       if (item.category_id === 1) category = "核心必修（補修）";
       else if (item.category_id === 3) category = "通識課程補修";
 
+      if (item.category_id === 1) category = "必修課程推薦";
+      else if ([2, 3, 4].includes(item.category_id)) category = "必修選修群推薦";
+      else if (item.category_id >= 6 && item.category_id <= 15) category = "通識/英文推薦";
+      else category = "專業選修推薦";
+
       let difficulty: 'Easy' | 'Medium' | 'Hard' = 'Medium';
       if (item.peer_pass_rate >= 0.95) difficulty = 'Easy';
       else if (item.peer_pass_rate < 0.8) difficulty = 'Hard';
