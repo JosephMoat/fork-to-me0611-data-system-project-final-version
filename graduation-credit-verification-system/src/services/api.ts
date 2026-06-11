@@ -60,34 +60,38 @@ const resolveCourseDetails = async () => {
   if (courseDetailsMap.size > 0) return courseDetailsMap;
 
   try {
-    const [coursesRes, categoriesRes, mappingsRes] = await Promise.all([
+    const [coursesRes, _categoriesRes, mappingsRes] = await Promise.all([
       apiClient.get('/courses/'),
       apiClient.get('/course-categories/'),
       apiClient.get('/course-category-mappings/')
     ]);
 
     const courses = coursesRes.data;
-    const categories = new Map<number, string>(categoriesRes.data.map((c: any) => [c.category_id, c.sub_type || c.main_type]));
     const mappings = mappingsRes.data;
 
-    const courseCatMap = new Map<string, string>(
-      mappings.map((m: any) => [m.course_id, categories.get(m.category_id) || ''])
-    );
+    const courseCatMap = new Map<string, number[]>();
+    mappings.forEach((m: any) => {
+      const current = courseCatMap.get(m.course_id) || [];
+      current.push(m.category_id);
+      courseCatMap.set(m.course_id, current);
+    });
+
+    const getCourseType = (categoryIds: number[]): 'required' | 'elective' | 'general' | 'pe' | 'english' => {
+      if (categoryIds.some((id) => id >= 1 && id <= 4)) return 'required';
+      if (categoryIds.includes(5)) return 'elective';
+      if (categoryIds.includes(15)) return 'english';
+      if (categoryIds.includes(16)) return 'pe';
+      if (categoryIds.some((id) => id >= 6 && id <= 14)) return 'general';
+      return 'elective';
+    };
 
     courses.forEach((c: any) => {
-      const backendType = courseCatMap.get(c.course_id) || '選修';
-      let type: 'required' | 'elective' | 'general' | 'pe' | 'english' = 'elective';
-      
-      if (backendType.includes('必修') || backendType === 'required') type = 'required';
-      else if (backendType.includes('選修') || backendType === 'elective') type = 'elective';
-      else if (backendType.includes('通識') || backendType === 'general') type = 'general';
-      else if (backendType.includes('體育') || backendType === 'pe') type = 'pe';
-      else if (backendType.includes('英文') || backendType === 'english') type = 'english';
+      const categoryIds = courseCatMap.get(c.course_id) || [5];
 
       courseDetailsMap.set(c.course_id, {
         name: c.course_name,
-        credits: c.credits,
-        type
+        credits: categoryIds.includes(16) ? 0 : c.credits,
+        type: getCourseType(categoryIds)
       });
     });
   } catch (e) {
