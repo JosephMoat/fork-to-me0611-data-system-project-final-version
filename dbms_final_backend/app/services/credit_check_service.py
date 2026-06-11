@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 from app.repositories.credit_check_repository import CreditCheckRepository
 
 
@@ -19,9 +21,13 @@ class CreditCheckService:
             student.admission_year
         )
 
-        passed_course_ids = self.repository.get_passed_course_ids_by_student(
+        passed_rows = self.repository.get_passed_records_with_categories_by_student(
             student.student_id
         )
+        passed_course_ids = {record.course_id for record, _category_id in passed_rows}
+        passed_records_by_category = defaultdict(list)
+        for record, category_id in passed_rows:
+            passed_records_by_category[category_id].append(record)
 
         missing_courses = []
 
@@ -44,10 +50,7 @@ class CreditCheckService:
         results = []
 
         for rule in rules:
-            passed_records = self.repository.get_passed_records_by_category(
-                student_id=student.student_id,
-                category_id=rule.category_id
-            )
+            passed_records = passed_records_by_category.get(rule.category_id, [])
 
             counted_course_ids = set()
             earned_credits = 0
@@ -72,7 +75,7 @@ class CreditCheckService:
             if rule.min_credits is not None:
                 credit_passed = effective_credits >= rule.min_credits
 
-            category = self.repository.get_category_by_id(rule.category_id)
+            category = rule.category
 
             missing_courses_count = None
             missing_credits = None
